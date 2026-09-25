@@ -67,8 +67,8 @@
             </div>
 
             <div class="score-box" id="applesCard">
-                <div class="score-label">
-                    <span>🍎</span> APPLES
+                <div class="score-label" id="foodCardLabel">
+                    <span id="foodCardIcon">🍎</span> <span id="foodCardText">TREATS</span>
                 </div>
                 <div class="score-val" id="applesDisplay">0</div>
             </div>
@@ -76,11 +76,11 @@
 
         <!-- Main Game Area / Canvas Wrapper -->
         <main class="canvas-wrapper" id="canvasWrapper">
-            <!-- In-game bonus alert badge -->
+            <!-- In-game bonus & food alert badges -->
             <div class="floating-status">
-                <div class="status-badge" id="goldenBadge">
-                    <span>⭐ GOLDEN APPLE!</span>
-                    <div class="bonus-timer-bar">
+                <div class="status-badge active" id="currentFoodBadge">
+                    <span id="currentFoodBadgeContent">🍎 Crisp Apple</span>
+                    <div class="bonus-timer-bar" id="goldenTimerBar" style="display: none;">
                         <div class="bonus-timer-fill" id="bonusTimerFill"></div>
                     </div>
                 </div>
@@ -95,9 +95,9 @@
             <!-- Start / Welcome Screen Modal -->
             <div class="modal-overlay active" id="startModal">
                 <div class="modal-content">
-                    <div class="modal-icon">🍎</div>
+                    <div class="modal-icon">🍎🐭🐸</div>
                     <h2 class="modal-title">Ready to Hunt?</h2>
-                    <p class="modal-subtitle">Guide the snake, eat delicious apples, and grow huge! <strong>Walls are safe portals</strong> — only your own body can hurt you!</p>
+                    <p class="modal-subtitle">Guide the snake to hunt its favorite foods — <strong>apples, mice, frogs, bird eggs, and golden treats</strong> appearing one by one!</p>
 
                     <button class="btn-primary" id="startBtn">
                         <span>▶</span> START GAME
@@ -142,7 +142,7 @@
                             <span class="stat-number" id="finalBestVal">0</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-title">Apples Eaten</span>
+                            <span class="stat-title">Treats Eaten</span>
                             <span class="stat-number" id="finalApplesVal">0</span>
                         </div>
                         <div class="stat-item">
@@ -154,49 +154,9 @@
                     <button class="btn-primary" id="restartBtn">
                         <span>🔄</span> PLAY AGAIN
                     </button>
-                    <button class="btn-secondary" id="shareBtn">
-                        <span>📤</span> Share Score
-                    </button>
                 </div>
             </div>
         </main>
-
-        <!-- Mobile Touch Virtual D-Pad Controller -->
-        <section class="touch-controller" id="touchController" aria-label="Touch Direction Controls">
-            <div class="dpad-container">
-                <button class="dpad-btn dpad-up" id="dpadUp" aria-label="Move Up">
-                    <span>▲</span>
-                </button>
-                <button class="dpad-btn dpad-left" id="dpadLeft" aria-label="Move Left">
-                    <span>◀</span>
-                </button>
-                <div class="dpad-center" id="dpadCenter" title="Pause / Resume">
-                    <span>⏸</span>
-                </div>
-                <button class="dpad-btn dpad-right" id="dpadRight" aria-label="Move Right">
-                    <span>▶</span>
-                </button>
-                <button class="dpad-btn dpad-down" id="dpadDown" aria-label="Move Down">
-                    <span>▼</span>
-                </button>
-            </div>
-            <div class="swipe-hint" id="swipeHint">
-                <span>👆</span> Swipe anywhere on screen to steer
-            </div>
-        </section>
-
-        <!-- Desktop Controls Guide & Footer -->
-        <footer class="controls-guide" id="desktopGuide">
-            <div class="guide-pill">
-                <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> or <span class="kbd">↑</span><span class="kbd">←</span><span class="kbd">↓</span><span class="kbd">→</span> Move
-            </div>
-            <div class="guide-pill">
-                <span class="kbd">Space</span> Pause
-            </div>
-            <div class="guide-pill">
-                <span class="kbd">R</span> Restart
-            </div>
-        </footer>
     </div>
 
     <!-- Settings Dialog Sheet -->
@@ -231,18 +191,6 @@
                 </div>
             </div>
 
-            <!-- Controls Mode -->
-            <div class="setting-row">
-                <div class="setting-info">
-                    <span class="setting-name">Touch Controls</span>
-                    <span class="setting-desc">On-screen D-Pad & Swipes</span>
-                </div>
-                <div class="segment-group" id="controlsGroup">
-                    <button class="segment-btn active" data-ctrl="both">Both</button>
-                    <button class="segment-btn" data-ctrl="swipe">Swipe</button>
-                    <button class="segment-btn" data-ctrl="dpad">D-Pad</button>
-                </div>
-            </div>
 
             <!-- Sound Toggle -->
             <div class="setting-row">
@@ -286,16 +234,48 @@
                 <div class="help-card">
                     <div class="help-card-icon">🍎</div>
                     <div class="help-card-text">
-                        <h4>Red Apple (+10 Pts)</h4>
-                        <p>Standard juicy apple. Increases score and adds 1 segment to your snake.</p>
+                        <h4>Crisp Apple (+10 Pts)</h4>
+                        <p>Juicy red fruit. Classic snake favorite!</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">🐭</div>
+                    <div class="help-card-text">
+                        <h4>Tiny Mouse (+15 Pts)</h4>
+                        <p>With cute pink ears and curling tail. Snakes love mice!</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">🐸</div>
+                    <div class="help-card-text">
+                        <h4>Green Frog (+20 Pts)</h4>
+                        <p>Big round eyes and tasty snack for bonus score.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">🥚</div>
+                    <div class="help-card-text">
+                        <h4>Bird Egg (+15 Pts)</h4>
+                        <p>Smooth speckled egg fresh from the bird nest.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">🍓</div>
+                    <div class="help-card-text">
+                        <h4>Sweet Strawberry (+12 Pts)</h4>
+                        <p>Delicious sweet berry with shiny seeds.</p>
                     </div>
                 </div>
 
                 <div class="help-card">
                     <div class="help-card-icon">⭐</div>
                     <div class="help-card-text">
-                        <h4>Golden Apple (+30 Pts)</h4>
-                        <p>Rare treat appearing for 6 seconds! Grab it before it disappears for huge bonus points.</p>
+                        <h4>Golden Star Treat (+35 Pts)</h4>
+                        <p>Rare treat with radiant aura! Catch it before the timer expires.</p>
                     </div>
                 </div>
 
@@ -311,7 +291,7 @@
                     <div class="help-card-icon">📱</div>
                     <div class="help-card-text">
                         <h4>Mobile Controls</h4>
-                        <p>Swipe in any direction across the game area or tap the on-screen D-Pad buttons.</p>
+                        <p>Swipe in any direction anywhere on the screen to steer the snake with smooth gesture control.</p>
                     </div>
                 </div>
 

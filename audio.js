@@ -98,6 +98,38 @@ class SoundManager {
         } catch (e) {}
     }
 
+    // Play specific sound for different snake treats
+    playEatFood(type = 'apple') {
+        if (this.muted) return;
+        this.resumeContext();
+        if (!this.ctx) return;
+
+        try {
+            if (type === 'mouse') {
+                // High playful squeak
+                this.playTone(920, 'sine', 0.07, 0.16, 1400);
+                setTimeout(() => this.playTone(1300, 'triangle', 0.06, 0.12, 1600), 50);
+            } else if (type === 'frog') {
+                // Ribbit pop (buoyant chirp)
+                this.playTone(280, 'triangle', 0.06, 0.16, 480);
+                setTimeout(() => this.playTone(380, 'square', 0.07, 0.14, 560), 55);
+            } else if (type === 'egg') {
+                // Delicate shell crunch and chime
+                this.playTone(1100, 'sine', 0.06, 0.15, 1450);
+                setTimeout(() => this.playTone(480, 'triangle', 0.08, 0.16, 320), 30);
+            } else if (type === 'strawberry') {
+                // Sweet harmonic berry chime
+                this.playTone(587, 'sine', 0.08, 0.14, 660);
+                setTimeout(() => this.playTone(880, 'sine', 0.10, 0.18, 940), 45);
+            } else if (type === 'golden') {
+                this.playGoldenEat();
+            } else {
+                // Classic crisp apple
+                this.playEat();
+            }
+        } catch (e) {}
+    }
+
     // Golden Apple / Bonus Eat Sound: sparkling arpeggio
     playGoldenEat() {
         if (this.muted) return;

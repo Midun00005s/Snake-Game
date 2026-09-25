@@ -1,9 +1,11 @@
 /**
  * Snake Arcade - Core Game Engine
- * Ultra-Smooth Movement Edition (60/120 FPS Sub-Frame Interpolation)
- * Dynamic Speed Scaling: Starts at 0.75x, grows with snake up to 1.30x MAX
- * Mobile Touch-to-Swipe: Instant continuous directional swiping anywhere on screen
- * Safe Border Portals: Death ONLY on Self-Collision
+ * Features:
+ * - Dynamic Food Variety: Diverse snake foods (Apple, Mouse, Frog, Egg, Berry, Golden Treat) appearing one by one!
+ * - Ultra-Smooth Movement: 60/120 FPS sub-pixel continuous interpolation
+ * - Speed Scaling: Starts at 0.75x, grows with snake up to 1.30x MAX
+ * - Mobile Touch-to-Swipe: Instant continuous directional swiping anywhere on screen
+ * - Safe Border Portals: Zero wall death (death ONLY on self-collision)
  */
 
 (function () {
@@ -19,6 +21,8 @@
     const highScoreDisplay = document.getElementById('highScoreDisplay');
     const applesDisplay = document.getElementById('applesDisplay');
     const scoreCard = document.getElementById('scoreCard');
+    const foodCardIcon = document.getElementById('foodCardIcon');
+    const foodCardText = document.getElementById('foodCardText');
 
     // Modals
     const startModal = document.getElementById('startModal');
@@ -33,7 +37,9 @@
     const finalSpeedVal = document.getElementById('finalSpeedVal');
 
     // Badges & Floating Alerts
-    const goldenBadge = document.getElementById('goldenBadge');
+    const currentFoodBadge = document.getElementById('currentFoodBadge');
+    const currentFoodBadgeContent = document.getElementById('currentFoodBadgeContent');
+    const goldenTimerBar = document.getElementById('goldenTimerBar');
     const bonusTimerFill = document.getElementById('bonusTimerFill');
     const speedBadge = document.getElementById('speedBadge');
     const speedDisplay = document.getElementById('speedDisplay');
@@ -48,7 +54,6 @@
     const soundBtn = document.getElementById('soundBtn');
     const soundIcon = document.getElementById('soundIcon');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const shareBtn = document.getElementById('shareBtn');
     const howToPlayBtn = document.getElementById('howToPlayBtn');
 
     // Settings & Help Sheets
@@ -59,20 +64,11 @@
     const soundSwitch = document.getElementById('soundSwitch');
     const vibrationSwitch = document.getElementById('vibrationSwitch');
     const difficultyGroup = document.getElementById('difficultyGroup');
-    const controlsGroup = document.getElementById('controlsGroup');
 
     const helpBtn = document.getElementById('helpBtn');
     const helpSheet = document.getElementById('helpSheet');
     const closeHelpBtn = document.getElementById('closeHelpBtn');
     const gotItBtn = document.getElementById('gotItBtn');
-
-    // Virtual D-Pad Buttons
-    const dpadUp = document.getElementById('dpadUp');
-    const dpadDown = document.getElementById('dpadDown');
-    const dpadLeft = document.getElementById('dpadLeft');
-    const dpadRight = document.getElementById('dpadRight');
-    const dpadCenter = document.getElementById('dpadCenter');
-    const touchController = document.getElementById('touchController');
 
     // Grid Dimensions
     const GRID_SIZE = 20; // 20 x 20 logical grid
@@ -91,11 +87,66 @@
     let speedMultiplier = MIN_SPEED_MULT;
     let currentSpeed = Math.round(BASE_SPEEDS.normal / MIN_SPEED_MULT); // ~120ms at start
 
+    // DIVERSE SNAKE FOOD CATALOG (What snakes love! Appearing one by one)
+    const FOOD_CATALOG = [
+        {
+            id: 'apple',
+            name: 'Crisp Apple',
+            icon: '🍎',
+            points: 10,
+            color: '#ef4444',
+            particleColors: ['#ef4444', '#f87171', '#22c55e']
+        },
+        {
+            id: 'mouse',
+            name: 'Tiny Mouse',
+            icon: '🐭',
+            points: 15,
+            color: '#d1d5db',
+            particleColors: ['#9ca3af', '#f3f4f6', '#f472b6']
+        },
+        {
+            id: 'frog',
+            name: 'Green Frog',
+            icon: '🐸',
+            points: 20,
+            color: '#10b981',
+            particleColors: ['#10b981', '#34d399', '#6ee7b7']
+        },
+        {
+            id: 'egg',
+            name: 'Bird Egg',
+            icon: '🥚',
+            points: 15,
+            color: '#38bdf8',
+            particleColors: ['#38bdf8', '#7dd3fc', '#f0f9ff']
+        },
+        {
+            id: 'strawberry',
+            name: 'Sweet Berry',
+            icon: '🍓',
+            points: 12,
+            color: '#f43f5e',
+            particleColors: ['#f43f5e', '#fb7185', '#fef08a']
+        },
+        {
+            id: 'golden',
+            name: 'Golden Treat',
+            icon: '⭐',
+            points: 35,
+            color: '#f59e0b',
+            particleColors: ['#f59e0b', '#fbbf24', '#fef08a'],
+            duration: 6500 // 6.5s bonus timer
+        }
+    ];
+
+    let foodCycleIndex = 0;
+    let currentFood = null;
+
     // Game Configuration State (Walls are ALWAYS safe wrap - zero wall death)
     const config = {
         difficulty: 'normal',
         wallMode: 'wrap', // Safe infinite portal wrap
-        controlsMode: 'both', // 'both', 'swipe', 'dpad'
         sound: true,
         vibration: true
     };
@@ -126,16 +177,10 @@
     let dir = { x: 1, y: 0 };
     let inputQueue = [];
 
-    // Food State
-    let apple = { x: 14, y: 10 };
-    let goldenApple = null;
-    const GOLDEN_DURATION = 6500; // 6.5 seconds
-
     // Visual Polish, Animation & Particle System
     let particles = [];
     let floatingTexts = [];
-    let digestionBumps = []; // Bulges traveling down the snake when an apple is eaten
-    let swipeIndicators = []; // Subtle glowing arrows confirming mobile touch swipes
+    let digestionBumps = [];
     let screenShake = 0;
 
     /**
@@ -175,7 +220,7 @@
      * Starts at 0.75x, grows smoothly to 1.30x MAX as snake grows
      */
     function updateSpeed() {
-        // Increases from 0.75x to 1.30x over 25 apples eaten (~0.022 per apple)
+        // Increases from 0.75x to 1.30x over 25 treats eaten (~0.022 per treat)
         speedMultiplier = Math.min(MAX_SPEED_MULT, +(MIN_SPEED_MULT + applesEaten * 0.022).toFixed(2));
         const base = BASE_SPEEDS[config.difficulty] || BASE_SPEEDS.normal;
         currentSpeed = Math.round(base / speedMultiplier);
@@ -194,16 +239,15 @@
     }
 
     /**
-     * Spawn Random Food Position (never colliding with snake or existing food)
+     * Spawn Random Free Grid Position
      */
     function getRandomGridPosition() {
         const freeSpots = [];
         for (let x = 0; x < GRID_SIZE; x++) {
             for (let y = 0; y < GRID_SIZE; y++) {
                 const inSnake = snake.some(seg => seg.x === x && seg.y === y);
-                const inApple = apple && apple.x === x && apple.y === y;
-                const inGold = goldenApple && goldenApple.x === x && goldenApple.y === y;
-                if (!inSnake && !inApple && !inGold) {
+                const inFood = currentFood && currentFood.x === x && currentFood.y === y;
+                if (!inSnake && !inFood) {
                     freeSpots.push({ x, y });
                 }
             }
@@ -212,30 +256,48 @@
         return freeSpots[Math.floor(Math.random() * freeSpots.length)];
     }
 
-    function spawnApple() {
-        apple = getRandomGridPosition();
+    /**
+     * Spawn Next Food Item in Rotation (One by One)
+     */
+    function spawnNextFood() {
+        const pos = getRandomGridPosition();
+        const def = FOOD_CATALOG[foodCycleIndex % FOOD_CATALOG.length];
+
+        currentFood = {
+            x: pos.x,
+            y: pos.y,
+            type: def.id,
+            def: def,
+            spawnTime: performance.now(),
+            duration: def.duration || null
+        };
+
+        updateFoodUI();
     }
 
-    function trySpawnGoldenApple() {
-        if (!goldenApple && applesEaten > 0 && (applesEaten % 5 === 0 || Math.random() < 0.22)) {
-            goldenApple = {
-                ...getRandomGridPosition(),
-                spawnTime: performance.now(),
-                duration: GOLDEN_DURATION
-            };
-            if (goldenBadge) goldenBadge.classList.add('active');
+    function updateFoodUI() {
+        if (!currentFood) return;
+        if (foodCardIcon) {
+            foodCardIcon.textContent = currentFood.def.icon;
+        }
+        if (currentFoodBadgeContent) {
+            currentFoodBadgeContent.innerHTML = `${currentFood.def.icon} ${currentFood.def.name} (+${currentFood.def.points} pts)`;
+        }
+        if (goldenTimerBar) {
+            goldenTimerBar.style.display = currentFood.duration ? 'block' : 'none';
         }
     }
 
     /**
-     * Particle & Floating Score Spawners
+     * Particle Spawner with Custom Multi-Color Palette
      */
-    function createParticles(x, y, color, count = 18) {
+    function createMultiColorParticles(x, y, colors, count = 20) {
         const pixelX = (x + 0.5) * cellSize;
         const pixelY = (y + 0.5) * cellSize;
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 1.2 + Math.random() * 3.8;
+            const color = colors[Math.floor(Math.random() * colors.length)];
             particles.push({
                 x: pixelX,
                 y: pixelY,
@@ -277,6 +339,7 @@
 
         score = 0;
         applesEaten = 0;
+        foodCycleIndex = 0;
 
         // Reset speed to 0.75x
         speedMultiplier = MIN_SPEED_MULT;
@@ -290,11 +353,9 @@
         particles = [];
         floatingTexts = [];
         digestionBumps = [];
-        swipeIndicators = [];
-        goldenApple = null;
-        if (goldenBadge) goldenBadge.classList.remove('active');
 
-        spawnApple();
+        // Spawn first food: 🍎 Apple
+        spawnNextFood();
 
         isPlaying = true;
         isPaused = false;
@@ -319,16 +380,17 @@
 
     /**
      * Direction Input Queuing (prevents 180-degree instant suicide)
+     * Returns true if input was accepted & queued, false otherwise.
      */
     function setDirection(newX, newY) {
-        if (!isPlaying || isPaused) return;
+        if (!isPlaying || isPaused) return false;
 
         const lastDir = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : dir;
 
         // Prevent 180-degree reversal into own neck
-        if (newX === -lastDir.x && newY === -lastDir.y) return;
+        if (newX === -lastDir.x && newY === -lastDir.y) return false;
         // Prevent redundant identical direction
-        if (newX === lastDir.x && newY === lastDir.y) return;
+        if (newX === lastDir.x && newY === lastDir.y) return false;
 
         // Queue input (up to 2 buffered turns)
         if (inputQueue.length < 2) {
@@ -336,6 +398,11 @@
             if (window.soundManager) {
                 window.soundManager.playTurn();
             }
+            return true;
+        } else {
+            // Buffer already has a pending turn; update the second one with latest player intent
+            inputQueue[1] = { x: newX, y: newY };
+            return true;
         }
     }
 
@@ -361,8 +428,7 @@
         newY = ((newY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
 
         // Check if food will be eaten this step
-        const willGrow = (newX === apple.x && newY === apple.y) || 
-                         (goldenApple && newX === goldenApple.x && newY === goldenApple.y);
+        const willGrow = currentFood && (newX === currentFood.x && newY === currentFood.y);
 
         // SELF-COLLISION CHECK: ONLY self-collision can kill the snake!
         const checkLength = willGrow ? snake.length : snake.length - 1;
@@ -402,10 +468,11 @@
         // Check Food Eaten
         let ateSomething = false;
 
-        // 1. Regular Red Apple
-        if (newX === apple.x && newY === apple.y) {
+        if (willGrow) {
             ateSomething = true;
-            score += 10;
+            const eaten = currentFood;
+
+            score += eaten.def.points;
             applesEaten++;
             scoreDisplay.textContent = score;
             applesDisplay.textContent = applesEaten;
@@ -413,46 +480,29 @@
             scoreDisplay.classList.add('bump');
             setTimeout(() => scoreDisplay.classList.remove('bump'), 150);
 
-            createParticles(apple.x, apple.y, '#ef4444', 20);
-            createFloatingText('+10', apple.x, apple.y, '#f87171');
-            triggerHaptic(25);
+            // Explosive particles in food's custom palette
+            createMultiColorParticles(eaten.x, eaten.y, eaten.def.particleColors, eaten.type === 'golden' ? 28 : 20);
 
-            // Add digestion wave swell that travels down the snake
+            // Floating score popup with food icon & points
+            createFloatingText(`+${eaten.def.points} ${eaten.def.icon}`, eaten.x, eaten.y, eaten.def.color);
+
+            triggerHaptic(eaten.type === 'golden' ? [30, 20, 40] : 25);
+            if (eaten.type === 'golden') screenShake = 7;
+
+            // Digestion wave pulse
             digestionBumps.push({ segmentIndex: 0 });
 
+            // Sound effect specific to this food type
             if (window.soundManager) {
-                window.soundManager.playEat();
+                window.soundManager.playEatFood(eaten.type);
             }
 
-            // DYNAMIC SPEED SCALING: Speed increases as snake grows (capped at 1.30x)
+            // Progressive speed adjustment (0.75x to 1.30x MAX)
             updateSpeed();
 
-            spawnApple();
-            trySpawnGoldenApple();
-        }
-
-        // 2. Golden Apple
-        if (goldenApple && newX === goldenApple.x && newY === goldenApple.y) {
-            ateSomething = true;
-            score += 30;
-            scoreDisplay.textContent = score;
-
-            scoreDisplay.classList.add('bump');
-            setTimeout(() => scoreDisplay.classList.remove('bump'), 150);
-
-            createParticles(goldenApple.x, goldenApple.y, '#f59e0b', 28);
-            createFloatingText('+30 ⭐', goldenApple.x, goldenApple.y, '#fbbf24');
-            triggerHaptic([30, 20, 40]);
-            screenShake = 6;
-
-            digestionBumps.push({ segmentIndex: 0 });
-
-            if (window.soundManager) {
-                window.soundManager.playGoldenEat();
-            }
-
-            goldenApple = null;
-            if (goldenBadge) goldenBadge.classList.remove('active');
+            // ADVANCE TO NEXT UNIQUE FOOD ITEM!
+            foodCycleIndex++;
+            spawnNextFood();
         }
 
         // If no food was eaten, pop tail
@@ -495,7 +545,7 @@
 
         // Explode snake body into glowing particles
         snake.forEach(seg => {
-            createParticles(seg.x, seg.y, '#10b981', 5);
+            createMultiColorParticles(seg.x, seg.y, ['#10b981', '#34d399', '#059669'], 5);
         });
 
         // Update Game Over Modal Stats
@@ -587,8 +637,8 @@
 
         drawGrid(width, height);
 
-        // Draw Food (Apples)
-        drawFood(timestamp);
+        // Draw Current Food Item
+        drawFoodItem(currentFood, timestamp);
 
         // Calculate sub-frame progress between 0 and 1 for buttery 60fps movement
         const progress = (isPlaying && !isPaused)
@@ -597,9 +647,6 @@
 
         // Draw Smooth Connected Snake
         drawSmoothSnake(timestamp, progress);
-
-        // Draw Swipe Direction Indicators (visual feedback for mobile touch gestures)
-        drawSwipeIndicators();
 
         // Draw Particles & Floating Texts
         drawParticles();
@@ -628,71 +675,30 @@
     }
 
     /**
-     * Draw Food (Juicy Red Apple & Golden Apple)
+     * Draw Diverse Food Items with Custom Animations & Shading
+     * Handles: Apple, Mouse, Frog, Bird Egg, Strawberry, Golden Star Treat
      */
-    function drawFood(timestamp) {
+    function drawFoodItem(food, timestamp) {
+        if (!food) return;
+
         const time = timestamp / 1000;
+        const px = food.x * cellSize;
+        const py = food.y * cellSize;
+        const cx = px + cellSize / 2;
+        const cy = py + cellSize / 2;
 
-        // 1. Regular Apple
-        if (apple) {
-            const px = apple.x * cellSize;
-            const py = apple.y * cellSize;
-            const pulse = Math.sin(time * 4) * 0.07 + 1;
+        ctx.save();
+        ctx.translate(cx, cy);
 
-            ctx.save();
-            ctx.translate(px + cellSize / 2, py + cellSize / 2);
-            ctx.scale(pulse, pulse);
-
-            // Red apple glow
-            ctx.shadowColor = 'rgba(239, 68, 68, 0.7)';
-            ctx.shadowBlur = 14;
-
-            // Apple Body
-            const rad = cellSize * 0.38;
-            const appleGrad = ctx.createRadialGradient(-rad * 0.3, -rad * 0.3, rad * 0.2, 0, 0, rad);
-            appleGrad.addColorStop(0, '#f87171');
-            appleGrad.addColorStop(0.7, '#ef4444');
-            appleGrad.addColorStop(1, '#b91c1c');
-
-            ctx.fillStyle = appleGrad;
-            ctx.beginPath();
-            ctx.arc(0, 2, rad, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Apple stem
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = '#78350f';
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(0, -rad + 2);
-            ctx.quadraticCurveTo(2, -rad - 4, 4, -rad - 5);
-            ctx.stroke();
-
-            // Apple leaf
-            ctx.fillStyle = '#22c55e';
-            ctx.beginPath();
-            ctx.ellipse(3, -rad - 2, 4, 2, Math.PI / 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Apple shine highlight
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-            ctx.beginPath();
-            ctx.ellipse(-rad * 0.35, -rad * 0.3, rad * 0.28, rad * 0.16, -Math.PI / 5, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.restore();
-        }
-
-        // 2. Golden Apple (Timed bonus)
-        if (goldenApple) {
-            const now = performance.now();
-            const elapsed = now - goldenApple.spawnTime;
-            const remainingRatio = Math.max(0, 1 - elapsed / goldenApple.duration);
-
+        // If it's a timed bonus, check timer and draw countdown ring
+        if (food.duration) {
+            const elapsed = performance.now() - food.spawnTime;
+            const remainingRatio = Math.max(0, 1 - elapsed / food.duration);
             if (remainingRatio <= 0) {
-                goldenApple = null;
-                if (goldenBadge) goldenBadge.classList.remove('active');
+                // Expired! Transition to next regular treat
+                foodCycleIndex++;
+                spawnNextFood();
+                ctx.restore();
                 return;
             }
 
@@ -700,43 +706,312 @@
                 bonusTimerFill.style.width = (remainingRatio * 100) + '%';
             }
 
-            const gx = goldenApple.x * cellSize;
-            const gy = goldenApple.y * cellSize;
-            const floatOffset = Math.sin(time * 6) * 3;
-
-            ctx.save();
-            ctx.translate(gx + cellSize / 2, gy + cellSize / 2 + floatOffset);
-
-            // Timer indicator ring
+            // Countdown timer ring
             ctx.beginPath();
-            ctx.arc(0, 0, cellSize * 0.46, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * remainingRatio));
-            ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+            ctx.arc(0, 0, cellSize * 0.47, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * remainingRatio));
+            ctx.strokeStyle = food.def.color;
             ctx.lineWidth = 2.5;
             ctx.stroke();
-
-            // Golden Glow
-            ctx.shadowColor = 'rgba(251, 191, 36, 0.9)';
-            ctx.shadowBlur = 18;
-
-            const grad = ctx.createRadialGradient(-2, -2, 2, 0, 0, cellSize * 0.36);
-            grad.addColorStop(0, '#fef08a');
-            grad.addColorStop(0.5, '#f59e0b');
-            grad.addColorStop(1, '#b45309');
-
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(0, 0, cellSize * 0.35, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Star Sparkle
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${Math.floor(cellSize * 0.45)}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('⭐', 0, 0);
-
-            ctx.restore();
         }
+
+        // Glowing halo in the food's primary color
+        ctx.shadowColor = food.def.color;
+        ctx.shadowBlur = 14;
+
+        switch (food.type) {
+            case 'apple': {
+                const pulse = Math.sin(time * 4) * 0.07 + 1;
+                ctx.scale(pulse, pulse);
+
+                const rad = cellSize * 0.38;
+                const grad = ctx.createRadialGradient(-rad * 0.3, -rad * 0.3, rad * 0.2, 0, 0, rad);
+                grad.addColorStop(0, '#f87171');
+                grad.addColorStop(0.7, '#ef4444');
+                grad.addColorStop(1, '#b91c1c');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 2, rad, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Stem
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#78350f';
+                ctx.lineWidth = 2.4;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(0, -rad + 2);
+                ctx.quadraticCurveTo(2, -rad - 4, 4, -rad - 5);
+                ctx.stroke();
+
+                // Leaf
+                ctx.fillStyle = '#22c55e';
+                ctx.beginPath();
+                ctx.ellipse(3, -rad - 2, 4, 2, Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Shine
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+                ctx.beginPath();
+                ctx.ellipse(-rad * 0.35, -rad * 0.3, rad * 0.28, rad * 0.16, -Math.PI / 5, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case 'mouse': {
+                // Little squeaky mouse!
+                const bodyRadX = cellSize * 0.34;
+                const bodyRadY = cellSize * 0.26;
+                const twitch = Math.sin(time * 7) * 0.08;
+
+                ctx.rotate(twitch);
+
+                // Tail curling behind with animated wiggle
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#f472b6';
+                ctx.lineWidth = 2.2;
+                ctx.lineCap = 'round';
+                const tailWiggle = Math.sin(time * 8) * 3;
+                ctx.beginPath();
+                ctx.moveTo(-bodyRadX + 2, 2);
+                ctx.quadraticCurveTo(-bodyRadX - 6, 4 + tailWiggle, -bodyRadX - 8, -3 + tailWiggle);
+                ctx.stroke();
+
+                ctx.shadowColor = 'rgba(209, 213, 219, 0.6)';
+                ctx.shadowBlur = 10;
+
+                // Mouse body
+                const mGrad = ctx.createRadialGradient(-2, -2, 2, 0, 0, bodyRadX);
+                mGrad.addColorStop(0, '#e5e7eb');
+                mGrad.addColorStop(0.7, '#9ca3af');
+                mGrad.addColorStop(1, '#6b7280');
+                ctx.fillStyle = mGrad;
+
+                ctx.beginPath();
+                ctx.ellipse(0, 0, bodyRadX, bodyRadY, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // Ears
+                const earRad = cellSize * 0.13;
+                ctx.fillStyle = '#9ca3af';
+                ctx.beginPath();
+                ctx.arc(-bodyRadX * 0.35, -bodyRadY * 0.9, earRad, 0, Math.PI * 2);
+                ctx.arc(bodyRadX * 0.25, -bodyRadY * 0.9, earRad, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#f472b6';
+                ctx.beginPath();
+                ctx.arc(-bodyRadX * 0.35, -bodyRadY * 0.9, earRad * 0.6, 0, Math.PI * 2);
+                ctx.arc(bodyRadX * 0.25, -bodyRadY * 0.9, earRad * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = '#111827';
+                ctx.beginPath();
+                ctx.arc(bodyRadX * 0.35, -bodyRadY * 0.25, cellSize * 0.05, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(bodyRadX * 0.37, -bodyRadY * 0.3, cellSize * 0.02, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pink nose
+                ctx.fillStyle = '#f472b6';
+                ctx.beginPath();
+                ctx.arc(bodyRadX * 0.9, 0, cellSize * 0.055, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Whiskers
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(bodyRadX * 0.7, 0);
+                ctx.lineTo(bodyRadX * 1.25, -cellSize * 0.14);
+                ctx.moveTo(bodyRadX * 0.7, 2);
+                ctx.lineTo(bodyRadX * 1.25, cellSize * 0.14);
+                ctx.stroke();
+                break;
+            }
+
+            case 'frog': {
+                // Cute green tree frog!
+                const throatPulse = Math.sin(time * 5) * 0.08 + 1;
+                ctx.scale(throatPulse, throatPulse);
+
+                const fRadX = cellSize * 0.34;
+                const fRadY = cellSize * 0.28;
+
+                const fGrad = ctx.createRadialGradient(-2, -2, 2, 0, 0, fRadX);
+                fGrad.addColorStop(0, '#34d399');
+                fGrad.addColorStop(0.7, '#10b981');
+                fGrad.addColorStop(1, '#047857');
+                ctx.fillStyle = fGrad;
+
+                ctx.beginPath();
+                ctx.ellipse(0, 2, fRadX, fRadY, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Front feet
+                ctx.fillStyle = '#059669';
+                ctx.beginPath();
+                ctx.arc(-fRadX * 0.8, fRadY * 0.6, cellSize * 0.08, 0, Math.PI * 2);
+                ctx.arc(fRadX * 0.8, fRadY * 0.6, cellSize * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Light tummy
+                ctx.fillStyle = 'rgba(167, 243, 208, 0.45)';
+                ctx.beginPath();
+                ctx.ellipse(0, 5, fRadX * 0.55, fRadY * 0.45, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Big protruding eyes on top
+                const eyeBulbRad = cellSize * 0.14;
+                ctx.fillStyle = '#10b981';
+                ctx.beginPath();
+                ctx.arc(-fRadX * 0.45, -fRadY * 0.65, eyeBulbRad, 0, Math.PI * 2);
+                ctx.arc(fRadX * 0.45, -fRadY * 0.65, eyeBulbRad, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(-fRadX * 0.45, -fRadY * 0.65, eyeBulbRad * 0.8, 0, Math.PI * 2);
+                ctx.arc(fRadX * 0.45, -fRadY * 0.65, eyeBulbRad * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Horizontal frog pupils
+                ctx.fillStyle = '#064e3b';
+                ctx.beginPath();
+                ctx.ellipse(-fRadX * 0.45, -fRadY * 0.65, eyeBulbRad * 0.5, eyeBulbRad * 0.28, 0, 0, Math.PI * 2);
+                ctx.ellipse(fRadX * 0.45, -fRadY * 0.65, eyeBulbRad * 0.5, eyeBulbRad * 0.28, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Smile
+                ctx.strokeStyle = '#065f46';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 3, cellSize * 0.16, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+                break;
+            }
+
+            case 'egg': {
+                // Speckled bird egg!
+                const wobble = Math.sin(time * 4) * 0.08;
+                ctx.rotate(wobble);
+
+                const eggRadX = cellSize * 0.28;
+                const eggRadY = cellSize * 0.36;
+
+                const eggGrad = ctx.createRadialGradient(-eggRadX * 0.3, -eggRadY * 0.3, 2, 0, 0, eggRadY);
+                eggGrad.addColorStop(0, '#f0f9ff');
+                eggGrad.addColorStop(0.6, '#7dd3fc');
+                eggGrad.addColorStop(1, '#0284c7');
+                ctx.fillStyle = eggGrad;
+
+                ctx.beginPath();
+                ctx.ellipse(0, 0, eggRadX, eggRadY, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Speckles
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#0369a1';
+                const speckles = [
+                    [-eggRadX * 0.4, -eggRadY * 0.3, 1.4],
+                    [eggRadX * 0.3, -eggRadY * 0.4, 1.2],
+                    [-eggRadX * 0.2, eggRadY * 0.3, 1.6],
+                    [eggRadX * 0.4, eggRadY * 0.2, 1.3],
+                    [0, -eggRadY * 0.1, 1.5]
+                ];
+                speckles.forEach(([sx, sy, sr]) => {
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // Gloss sheen
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.ellipse(-eggRadX * 0.35, -eggRadY * 0.35, eggRadX * 0.3, eggRadY * 0.18, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case 'strawberry': {
+                // Sweet Ruby Strawberry
+                const pulse = Math.sin(time * 4) * 0.06 + 1;
+                ctx.scale(pulse, pulse);
+
+                const bRad = cellSize * 0.34;
+                const bGrad = ctx.createRadialGradient(-2, -2, 2, 0, 0, bRad);
+                bGrad.addColorStop(0, '#fb7185');
+                bGrad.addColorStop(0.7, '#f43f5e');
+                bGrad.addColorStop(1, '#9f1239');
+                ctx.fillStyle = bGrad;
+
+                // Tapered berry shape
+                ctx.beginPath();
+                ctx.moveTo(0, bRad);
+                ctx.bezierCurveTo(-bRad * 1.2, 0, -bRad * 0.8, -bRad * 0.8, 0, -bRad * 0.4);
+                ctx.bezierCurveTo(bRad * 0.8, -bRad * 0.8, bRad * 1.2, 0, 0, bRad);
+                ctx.fill();
+
+                // Calyx green leaf crown
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#22c55e';
+                ctx.beginPath();
+                ctx.ellipse(-cellSize * 0.15, -bRad * 0.65, 4, 2, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.ellipse(cellSize * 0.15, -bRad * 0.65, 4, 2, Math.PI / 4, 0, Math.PI * 2);
+                ctx.ellipse(0, -bRad * 0.7, 4, 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Golden seeds
+                ctx.fillStyle = '#fef08a';
+                const seeds = [
+                    [-4, -2], [4, -2],
+                    [-7, 3], [0, 4], [7, 3],
+                    [-3, 8], [3, 8],
+                    [0, 12]
+                ];
+                seeds.forEach(([sx, sy]) => {
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                break;
+            }
+
+            case 'golden': {
+                // Radiant Golden Star Treat
+                const floatOffset = Math.sin(time * 6) * 3;
+                ctx.translate(0, floatOffset);
+
+                ctx.shadowColor = 'rgba(251, 191, 36, 0.95)';
+                ctx.shadowBlur = 20;
+
+                const gRad = cellSize * 0.36;
+                const grad = ctx.createRadialGradient(-2, -2, 2, 0, 0, gRad);
+                grad.addColorStop(0, '#fef08a');
+                grad.addColorStop(0.5, '#f59e0b');
+                grad.addColorStop(1, '#b45309');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, gRad, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Center star sparkle
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `${Math.floor(cellSize * 0.45)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⭐', 0, 0);
+                break;
+            }
+        }
+
+        ctx.restore();
     }
 
     /**
@@ -936,57 +1211,7 @@
         if (head.gy > GRID_SIZE - 1) drawHeadAt(head.px, head.py - GRID_SIZE * cellSize);
     }
 
-    /**
-     * Visual Touch Swipe Feedback (Glowing Neon Directional Arrow on Screen)
-     */
-    function triggerSwipeVisual(dx, dy) {
-        swipeIndicators.push({
-            dx: dx,
-            dy: dy,
-            alpha: 1.0
-        });
-    }
 
-    function drawSwipeIndicators() {
-        const w = canvas.width / (window.devicePixelRatio || 1);
-        const h = canvas.height / (window.devicePixelRatio || 1);
-
-        for (let i = swipeIndicators.length - 1; i >= 0; i--) {
-            const ind = swipeIndicators[i];
-            ind.alpha -= 0.06;
-            if (ind.alpha <= 0) {
-                swipeIndicators.splice(i, 1);
-                continue;
-            }
-
-            ctx.save();
-            ctx.globalAlpha = ind.alpha * 0.45;
-            ctx.strokeStyle = '#10b981';
-            ctx.shadowColor = '#10b981';
-            ctx.shadowBlur = 14;
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
-            const cx = w / 2;
-            const cy = h / 2;
-            const sz = cellSize * 1.3;
-
-            ctx.translate(cx, cy);
-            if (ind.dx === 1) ctx.rotate(0);
-            else if (ind.dx === -1) ctx.rotate(Math.PI);
-            else if (ind.dy === 1) ctx.rotate(Math.PI / 2);
-            else if (ind.dy === -1) ctx.rotate(-Math.PI / 2);
-
-            ctx.beginPath();
-            ctx.moveTo(-sz * 0.4, -sz * 0.4);
-            ctx.lineTo(sz * 0.35, 0);
-            ctx.lineTo(-sz * 0.4, sz * 0.4);
-            ctx.stroke();
-
-            ctx.restore();
-        }
-    }
 
     /**
      * Draw Particles
@@ -1046,7 +1271,7 @@
             const elapsed = timestamp - lastStepTime;
             if (elapsed >= currentSpeed) {
                 updateGame();
-                lastStepTime = timestamp;
+                lastStepTime = timestamp - (elapsed % currentSpeed);
             }
         }
 
@@ -1060,19 +1285,27 @@
      * =========================================================================
      */
 
-    // 1. Mobile Touch to Swipe (Instant response & continuous steering)
+    // 1. Mobile Touch to Swipe (Ultra-smooth, responsive & continuous gesture steering)
     let touchStartX = null;
     let touchStartY = null;
+    let touchOriginX = null;
+    let touchOriginY = null;
+    let touchStartTime = 0;
     let isTouchActive = false;
-    const SWIPE_THRESHOLD = 16; // Snappy 16px threshold for instant turn reaction
+    let lastTurnTime = 0;
+    const SWIPE_MIN_DIST = 14; // Snappy 14px threshold for immediate turn reaction
 
     function handleTouchStart(e) {
-        // Do not intercept taps on interactive controls
-        if (e.target.closest('button, .modal-content, .sheet-panel')) return;
+        // Do not intercept taps on buttons, modals, or dialog sheets
+        if (e.target.closest('button, .modal-content, .sheet-panel, .icon-btn')) return;
 
         if (e.touches && e.touches.length > 0) {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchOriginX = touch.clientX;
+            touchOriginY = touch.clientY;
+            touchStartTime = performance.now();
             isTouchActive = true;
             if (window.soundManager) window.soundManager.resumeContext();
         }
@@ -1080,71 +1313,71 @@
 
     function handleTouchMove(e) {
         if (!isTouchActive || touchStartX === null || touchStartY === null) return;
-        if (e.target.closest('button, .modal-content, .sheet-panel')) return;
+        if (e.target.closest('button, .modal-content, .sheet-panel, .icon-btn')) return;
 
-        // Prevent mobile browser page bouncing/scrolling during game
         if (e.cancelable) e.preventDefault();
 
         const currentX = e.touches[0].clientX;
         const currentY = e.touches[0].clientY;
         const diffX = currentX - touchStartX;
         const diffY = currentY - touchStartY;
+        const absX = Math.abs(diffX);
+        const absY = Math.abs(diffY);
+        const distance = Math.hypot(diffX, diffY);
 
-        // Check if movement exceeded threshold
-        if (Math.abs(diffX) >= SWIPE_THRESHOLD || Math.abs(diffY) >= SWIPE_THRESHOLD) {
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                // Horizontal Swipe
-                if (diffX > 0) {
-                    setDirection(1, 0); // Right
-                    highlightDpad(dpadRight);
-                    triggerSwipeVisual(1, 0);
-                } else {
-                    setDirection(-1, 0); // Left
-                    highlightDpad(dpadLeft);
-                    triggerSwipeVisual(-1, 0);
-                }
-            } else {
-                // Vertical Swipe
-                if (diffY > 0) {
-                    setDirection(0, 1); // Down
-                    highlightDpad(dpadDown);
-                    triggerSwipeVisual(0, 1);
-                } else {
-                    setDirection(0, -1); // Up
-                    highlightDpad(dpadUp);
-                    triggerSwipeVisual(0, -1);
-                }
+        if (distance >= SWIPE_MIN_DIST) {
+            // Determine dominant direction
+            const isHorizontal = absX >= absY;
+            const targetX = isHorizontal ? (diffX > 0 ? 1 : -1) : 0;
+            const targetY = isHorizontal ? 0 : (diffY > 0 ? 1 : -1);
+
+            const changed = setDirection(targetX, targetY);
+            if (changed) {
+                triggerHaptic(12);
+                lastTurnTime = performance.now();
             }
 
-            triggerHaptic(14);
-
-            // Secret for continuous swiping: reset anchor to current point
-            // This enables the player to steer through turns without lifting their finger!
+            // Continuously update tracking anchor for smooth multi-turn strokes without lifting thumb
             touchStartX = currentX;
             touchStartY = currentY;
         }
     }
 
     function handleTouchEnd(e) {
+        if (!isTouchActive) return;
+
+        // Support quick flick gesture if player swiftly swipes and lifts thumb (< 280ms)
+        const duration = performance.now() - touchStartTime;
+        if (duration < 280 && touchOriginX !== null && touchOriginY !== null) {
+            const endTouch = (e.changedTouches && e.changedTouches.length > 0) ? e.changedTouches[0] : null;
+            if (endTouch) {
+                const totalDiffX = endTouch.clientX - touchOriginX;
+                const totalDiffY = endTouch.clientY - touchOriginY;
+                const totalDist = Math.hypot(totalDiffX, totalDiffY);
+
+                if (totalDist >= 12 && (performance.now() - lastTurnTime > 80)) {
+                    const isHorizontal = Math.abs(totalDiffX) >= Math.abs(totalDiffY);
+                    const targetX = isHorizontal ? (totalDiffX > 0 ? 1 : -1) : 0;
+                    const targetY = isHorizontal ? 0 : (totalDiffY > 0 ? 1 : -1);
+                    if (setDirection(targetX, targetY)) {
+                        triggerHaptic(12);
+                    }
+                }
+            }
+        }
+
         isTouchActive = false;
         touchStartX = null;
         touchStartY = null;
+        touchOriginX = null;
+        touchOriginY = null;
     }
 
-    // Attach touch-to-swipe listeners to canvas wrapper
-    canvasWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvasWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvasWrapper.addEventListener('touchend', handleTouchEnd, { passive: true });
-    canvasWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-
-    // Also attach to the app container so players can swipe in the comfortable lower thumb zone!
-    const appEl = document.getElementById('app');
-    if (appEl) {
-        appEl.addEventListener('touchstart', handleTouchStart, { passive: false });
-        appEl.addEventListener('touchmove', handleTouchMove, { passive: false });
-        appEl.addEventListener('touchend', handleTouchEnd, { passive: true });
-        appEl.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-    }
+    // Attach single universal touch listeners to window (captures entire screen without duplicate bubbling)
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
     // 2. PC Keyboard Controls
     window.addEventListener('keydown', (e) => {
@@ -1155,25 +1388,21 @@
             case 'KeyW':
                 e.preventDefault();
                 setDirection(0, -1);
-                highlightDpad(dpadUp);
                 break;
             case 'ArrowDown':
             case 'KeyS':
                 e.preventDefault();
                 setDirection(0, 1);
-                highlightDpad(dpadDown);
                 break;
             case 'ArrowLeft':
             case 'KeyA':
                 e.preventDefault();
                 setDirection(-1, 0);
-                highlightDpad(dpadLeft);
                 break;
             case 'ArrowRight':
             case 'KeyD':
                 e.preventDefault();
                 setDirection(1, 0);
-                highlightDpad(dpadRight);
                 break;
             case 'Space':
             case 'KeyP':
@@ -1194,46 +1423,6 @@
                 break;
         }
     });
-
-    function highlightDpad(btn) {
-        if (!btn) return;
-        btn.classList.add('pressed');
-        setTimeout(() => btn.classList.remove('pressed'), 120);
-    }
-
-    // 3. Virtual On-Screen D-Pad (Touch / Click)
-    function setupDpadButton(btn, dx, dy) {
-        if (!btn) return;
-
-        const handlePress = (e) => {
-            e.preventDefault();
-            if (window.soundManager) window.soundManager.resumeContext();
-            setDirection(dx, dy);
-            triggerHaptic(15);
-            btn.classList.add('pressed');
-        };
-
-        const handleRelease = (e) => {
-            btn.classList.remove('pressed');
-        };
-
-        btn.addEventListener('pointerdown', handlePress);
-        btn.addEventListener('pointerup', handleRelease);
-        btn.addEventListener('pointerleave', handleRelease);
-        btn.addEventListener('pointercancel', handleRelease);
-    }
-
-    setupDpadButton(dpadUp, 0, -1);
-    setupDpadButton(dpadDown, 0, 1);
-    setupDpadButton(dpadLeft, -1, 0);
-    setupDpadButton(dpadRight, 1, 0);
-
-    if (dpadCenter) {
-        dpadCenter.addEventListener('click', (e) => {
-            e.preventDefault();
-            togglePause();
-        });
-    }
 
     // 4. Modal and Button Click Handlers
     startBtn.addEventListener('click', () => {
@@ -1284,30 +1473,7 @@
 
     fullscreenBtn.addEventListener('click', toggleFullscreen);
 
-    // Share Score Handler
-    shareBtn.addEventListener('click', async () => {
-        const shareData = {
-            title: 'Snake Arcade High Score',
-            text: `🐍 I scored ${score} points at ${speedMultiplier >= MAX_SPEED_MULT ? '1.30x MAX' : speedMultiplier.toFixed(2) + 'x'} speed in Snake Arcade! Can you beat my score?`,
-            url: window.location.href
-        };
 
-        if (navigator.share) {
-            try {
-                await navigator.share(shareData);
-            } catch (err) {}
-        } else {
-            try {
-                await navigator.clipboard.writeText(shareData.text);
-                shareBtn.innerHTML = '<span>✅</span> Copied to Clipboard!';
-                setTimeout(() => {
-                    shareBtn.innerHTML = '<span>📤</span> Share Score';
-                }, 2000);
-            } catch (e) {
-                alert(shareData.text);
-            }
-        }
-    });
 
     // Settings Modal Sheet handlers
     function openSettings() {
@@ -1333,24 +1499,7 @@
         }
     });
 
-    // Controls Mode buttons
-    controlsGroup.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') {
-            controlsGroup.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            config.controlsMode = e.target.dataset.ctrl;
-            applyControlsMode();
-            saveConfig();
-        }
-    });
 
-    function applyControlsMode() {
-        if (config.controlsMode === 'swipe') {
-            document.body.classList.add('hide-dpad');
-        } else {
-            document.body.classList.remove('hide-dpad');
-        }
-    }
 
     soundSwitch.addEventListener('change', () => {
         config.sound = soundSwitch.checked;
@@ -1405,11 +1554,7 @@
             b.classList.toggle('active', b.dataset.diff === config.difficulty);
         });
 
-        // Sync controls
-        controlsGroup.querySelectorAll('.segment-btn').forEach(b => {
-            b.classList.toggle('active', b.dataset.ctrl === config.controlsMode);
-        });
-        applyControlsMode();
+
 
         // Sync Sound
         const isMuted = localStorage.getItem('snake_muted') === 'true';
