@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Snake Arcade - Eat Apples & Grow (PC & Mobile)</title>
+    <meta name="description" content="Play the ultimate Snake game on Mobile and PC! Eat delicious juicy apples, unlock golden bonuses, and beat your high score with smooth touch and keyboard controls.">
+    <meta name="theme-color" content="#090d16">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Favicon (SVG Apple) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍎</text></svg>">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- Header -->
+        <header class="game-header">
+            <div class="brand-wrapper">
+                <div class="logo-icon" aria-hidden="true">🐍</div>
+                <div class="brand-text">
+                    <h1>SNAKE <span class="badge">ARCADE</span></h1>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button class="icon-btn" id="soundBtn" title="Toggle Sound (M)" aria-label="Toggle Sound">
+                    <span id="soundIcon">🔊</span>
+                </button>
+                <button class="icon-btn" id="pauseBtn" title="Pause / Resume (Space / P)" aria-label="Pause or Resume Game">
+                    <span id="pauseIcon">⏸️</span>
+                </button>
+                <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Game Settings">
+                    <span>⚙️</span>
+                </button>
+                <button class="icon-btn" id="helpBtn" title="How to Play" aria-label="Game Rules & Controls">
+                    <span>❓</span>
+                </button>
+                <button class="icon-btn" id="fullscreenBtn" title="Toggle Fullscreen (F)" aria-label="Fullscreen">
+                    <span id="fullscreenIcon">⛶</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scoreboard HUD -->
+        <section class="scoreboard" aria-label="Game Scores">
+            <div class="score-box highlight" id="scoreCard">
+                <div class="score-label">
+                    <span>⭐</span> SCORE
+                </div>
+                <div class="score-val" id="scoreDisplay">0</div>
+            </div>
+
+            <div class="score-box gold" id="highScoreCard">
+                <div class="score-label">
+                    <span>🏆</span> BEST
+                </div>
+                <div class="score-val" id="highScoreDisplay">0</div>
+            </div>
+
+            <div class="score-box" id="applesCard">
+                <div class="score-label">
+                    <span>🍎</span> APPLES
+                </div>
+                <div class="score-val" id="applesDisplay">0</div>
+            </div>
+        </section>
+
+        <!-- Main Game Area / Canvas Wrapper -->
+        <main class="canvas-wrapper" id="canvasWrapper">
+            <!-- In-game bonus alert badge -->
+            <div class="floating-status">
+                <div class="status-badge" id="goldenBadge">
+                    <span>⭐ GOLDEN APPLE!</span>
+                    <div class="bonus-timer-bar">
+                        <div class="bonus-timer-fill" id="bonusTimerFill"></div>
+                    </div>
+                </div>
+                <div class="status-badge speed-pill active" id="speedBadge" title="Current Speed Multiplier">
+                    <span>⚡ <span id="speedDisplay">0.75x</span></span>
+                </div>
+            </div>
+
+            <!-- HTML5 Game Canvas -->
+            <canvas id="gameCanvas" width="480" height="480"></canvas>
+
+            <!-- Start / Welcome Screen Modal -->
+            <div class="modal-overlay active" id="startModal">
+                <div class="modal-content">
+                    <div class="modal-icon">🍎</div>
+                    <h2 class="modal-title">Ready to Hunt?</h2>
+                    <p class="modal-subtitle">Guide the snake, eat delicious apples, and grow huge! <strong>Walls are safe portals</strong> — only your own body can hurt you!</p>
+
+                    <button class="btn-primary" id="startBtn">
+                        <span>▶</span> START GAME
+                    </button>
+                    <button class="btn-secondary" id="howToPlayBtn">
+                        <span>📖</span> How to Play
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pause Modal -->
+            <div class="modal-overlay" id="pauseModal">
+                <div class="modal-content">
+                    <div class="modal-icon">⏸️</div>
+                    <h2 class="modal-title">Game Paused</h2>
+                    <p class="modal-subtitle">Take a breather. The snake is waiting for your command.</p>
+
+                    <button class="btn-primary" id="resumeBtn">
+                        <span>▶</span> RESUME
+                    </button>
+                    <button class="btn-secondary" id="restartFromPauseBtn">
+                        <span>🔄</span> Restart
+                    </button>
+                </div>
+            </div>
+
+            <!-- Game Over Modal -->
+            <div class="modal-overlay" id="gameOverModal">
+                <div class="modal-content">
+                    <div class="modal-icon skull" id="gameOverIcon">💥</div>
+                    <h2 class="modal-title" id="gameOverTitle">Self Collision!</h2>
+                    <p class="modal-subtitle" id="gameOverDesc">You ran into your own body! Watch out for your tail as you grow longer.</p>
+                    <div class="new-high-badge" id="newHighBadge" style="display: none;">🏆 NEW RECORD!</div>
+
+                    <div class="game-stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-title">Final Score</span>
+                            <span class="stat-number" id="finalScoreVal">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-title">Best Score</span>
+                            <span class="stat-number" id="finalBestVal">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-title">Apples Eaten</span>
+                            <span class="stat-number" id="finalApplesVal">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-title">Top Speed</span>
+                            <span class="stat-number" id="finalSpeedVal">0.75x</span>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" id="restartBtn">
+                        <span>🔄</span> PLAY AGAIN
+                    </button>
+                    <button class="btn-secondary" id="shareBtn">
+                        <span>📤</span> Share Score
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Mobile Touch Virtual D-Pad Controller -->
+        <section class="touch-controller" id="touchController" aria-label="Touch Direction Controls">
+            <div class="dpad-container">
+                <button class="dpad-btn dpad-up" id="dpadUp" aria-label="Move Up">
+                    <span>▲</span>
+                </button>
+                <button class="dpad-btn dpad-left" id="dpadLeft" aria-label="Move Left">
+                    <span>◀</span>
+                </button>
+                <div class="dpad-center" id="dpadCenter" title="Pause / Resume">
+                    <span>⏸</span>
+                </div>
+                <button class="dpad-btn dpad-right" id="dpadRight" aria-label="Move Right">
+                    <span>▶</span>
+                </button>
+                <button class="dpad-btn dpad-down" id="dpadDown" aria-label="Move Down">
+                    <span>▼</span>
+                </button>
+            </div>
+            <div class="swipe-hint" id="swipeHint">
+                <span>👆</span> Swipe anywhere on screen to steer
+            </div>
+        </section>
+
+        <!-- Desktop Controls Guide & Footer -->
+        <footer class="controls-guide" id="desktopGuide">
+            <div class="guide-pill">
+                <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> or <span class="kbd">↑</span><span class="kbd">←</span><span class="kbd">↓</span><span class="kbd">→</span> Move
+            </div>
+            <div class="guide-pill">
+                <span class="kbd">Space</span> Pause
+            </div>
+            <div class="guide-pill">
+                <span class="kbd">R</span> Restart
+            </div>
+        </footer>
+    </div>
+
+    <!-- Settings Dialog Sheet -->
+    <div class="sheet-dialog" id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsHeading">
+        <div class="sheet-panel">
+            <div class="sheet-header">
+                <h3 class="sheet-title" id="settingsHeading">⚙️ Game Settings</h3>
+                <button class="close-btn" id="closeSettingsBtn" aria-label="Close Settings">✕</button>
+            </div>
+
+            <!-- Difficulty -->
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Difficulty</span>
+                    <span class="setting-desc">Speed & challenge level</span>
+                </div>
+                <div class="segment-group" id="difficultyGroup">
+                    <button class="segment-btn" data-diff="easy">Easy</button>
+                    <button class="segment-btn active" data-diff="normal">Normal</button>
+                    <button class="segment-btn" data-diff="hard">Hard</button>
+                </div>
+            </div>
+
+            <!-- Wall Mode / Safe Borders -->
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Border Portals</span>
+                    <span class="setting-desc">Infinite safe pass-through (never die on walls)</span>
+                </div>
+                <div class="segment-group" id="wallGroup">
+                    <button class="segment-btn active" data-wall="wrap">Safe Wrap</button>
+                </div>
+            </div>
+
+            <!-- Controls Mode -->
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Touch Controls</span>
+                    <span class="setting-desc">On-screen D-Pad & Swipes</span>
+                </div>
+                <div class="segment-group" id="controlsGroup">
+                    <button class="segment-btn active" data-ctrl="both">Both</button>
+                    <button class="segment-btn" data-ctrl="swipe">Swipe</button>
+                    <button class="segment-btn" data-ctrl="dpad">D-Pad</button>
+                </div>
+            </div>
+
+            <!-- Sound Toggle -->
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Sound Effects</span>
+                    <span class="setting-desc">Retro synthesized audio</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="soundSwitch" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <!-- Vibration / Haptics Toggle -->
+            <div class="setting-row">
+                <div class="setting-info">
+                    <span class="setting-name">Haptic Feedback</span>
+                    <span class="setting-desc">Vibrate on mobile devices</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="vibrationSwitch" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn-primary" id="saveSettingsBtn">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- How To Play Modal Sheet -->
+    <div class="sheet-dialog" id="helpSheet" role="dialog" aria-modal="true" aria-labelledby="helpHeading">
+        <div class="sheet-panel">
+            <div class="sheet-header">
+                <h3 class="sheet-title" id="helpHeading">📖 How to Play</h3>
+                <button class="close-btn" id="closeHelpBtn" aria-label="Close Help">✕</button>
+            </div>
+
+            <div class="help-grid">
+                <div class="help-card">
+                    <div class="help-card-icon">🍎</div>
+                    <div class="help-card-text">
+                        <h4>Red Apple (+10 Pts)</h4>
+                        <p>Standard juicy apple. Increases score and adds 1 segment to your snake.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">⭐</div>
+                    <div class="help-card-text">
+                        <h4>Golden Apple (+30 Pts)</h4>
+                        <p>Rare treat appearing for 6 seconds! Grab it before it disappears for huge bonus points.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">💻</div>
+                    <div class="help-card-text">
+                        <h4>PC Controls</h4>
+                        <p>Use Arrow keys or W, A, S, D to steer. Press Space or P to pause. Press R to restart.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">📱</div>
+                    <div class="help-card-text">
+                        <h4>Mobile Controls</h4>
+                        <p>Swipe in any direction across the game area or tap the on-screen D-Pad buttons.</p>
+                    </div>
+                </div>
+
+                <div class="help-card">
+                    <div class="help-card-icon">🌀</div>
+                    <div class="help-card-text">
+                        <h4>Safe Borders (Zero Wall Death)</h4>
+                        <p>Walls never kill you! You safely pass through to the opposite side. The only way to die is biting your own body.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn-primary" id="gotItBtn">Got It!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="audio.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
